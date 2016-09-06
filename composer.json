@@ -1,0 +1,21 @@
+{
+    "name": "salestreamsoft/provider_merge",
+    "description": "PHP Scripts that will automate the migration of one provider's data into another provider account",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "mwitt",
+            "email": "mwitt@salestreamsoft.com"
+        }
+    ],
+    "require": {
+        "vlucas/phpdotenv": "^2.3",
+        "monolog/monolog": "^1.21"
+    },
+    "autoload" : {
+        "psr-4" : {
+            "Salestreamsoft\\ProviderMerge\\" : "src/Salestreamsoft/ProviderMerge"
+        }
+    }
+}
