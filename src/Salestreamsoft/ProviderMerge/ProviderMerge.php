@@ -413,6 +413,11 @@ class ProviderMerge
             $affectedRows = $stmt->rowCount();
 
             if($affectedRows < 1){
+                $response['message'] = "Error: SQL Query Error";
+                $response['sql'] = $sql;
+                $response['sql_exception'] = '';
+                print_r($response);
+
                 $this->db->rollBack();
                 throw new \Exception("Merge Provider Error: Failed to reset order relationships");
             }
@@ -443,6 +448,11 @@ class ProviderMerge
             $affectedRows = $stmt->rowCount();
 
             if($affectedRows < 1){
+                $response['message'] = "Error: SQL Query Error";
+                $response['sql'] = $sql;
+                $response['sql_exception'] = '';
+                print_r($response);
+
                 $this->db->rollBack();
                 throw new \Exception("Merge Provider Error: Failed to deactivate legacy provider");
             }
@@ -472,12 +482,6 @@ class ProviderMerge
         try{
             $stmt = $this->db->prepare($sql);
             $stmt->execute();
-            $affectedRows = $stmt->rowCount();
-
-            if($affectedRows < 1){
-                $this->db->rollBack();
-                throw new \Exception("Merge Provider Error: Failed to reset conflicting comm schema import template names");
-            }
 
             array_push($this->commSchemasCurrentlyReset, $this->table['table_schema']);
 
