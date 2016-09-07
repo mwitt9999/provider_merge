@@ -175,7 +175,7 @@ class ProviderMerge
         $whereStatement = '';
         foreach ($legacy_provider_record as $columnName => $columnValue) {
             if ($columnValue != '') {
-                $columnValue = "'" . $columnValue . "'";
+                $columnValue = "'" . pg_escape_string($columnValue) . "'";
                 if (empty($whereStatement) ? $whereStatement = ' WHERE "' . $columnName . '" = ' . $columnValue : $whereStatement .= ' AND "' . $columnName . '" = ' . $columnValue) ;
             }
         }
