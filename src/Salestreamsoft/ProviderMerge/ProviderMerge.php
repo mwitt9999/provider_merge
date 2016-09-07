@@ -58,18 +58,29 @@ class ProviderMerge
      */
     public function start(){
 
+        //Begin pg transaction
         $this->db->beginTransaction();
 
+        //Sets a variable that contains all possible affected tables by merge
         $this->setPossibleAffectedTables();
+        //Start merge process
         $this->mergeProviders();
+        //Resets all legacy order relationships from order relationships table
         $this->resetLegacyOrderRelationships();
+        //Sets legacy provider inactive flag to true in quote provider table
         $this->deactivateLegacyProvider();
 
+        //If script was ran with dry run flag to true
         if($this->dryRun == "true"){
+            //If any tables were affected during dry run
             if($this->pgDumpTables){
+                //Builds a pg dump string containing affected tables
                 $this->buildPgDumpCommand();
+                //Builds a pg trucate tables command with affected tables
                 $this->buildTruncateCommand();
+                //Builds a restore command for the dump command created
                 $this->buildRestoreDbCommand();
+                //Rolls back transaction and outputs restore commands to terminal
                 $this->finalizeDryRun();
             }else{
                 echo "\n";
@@ -126,32 +137,45 @@ class ProviderMerge
         $this->preMergeTableRecordCounts = array();
         $this->postMergeTableRecordCounts = array();
 
+        //Start looping through all possible affected tables
         foreach ($this->possibleAffectedTables as $key => $table) {
+            //sets current table variable for current looped instance
             $this->table = $table;
 
+            //gets legacy and continuing record counts for current looped table
             $this->preMergeTableRecordCounts = $this->getTableRecordCountsByProviderIds();
 
+            //If the table has legacy records to merge
             if($this->preMergeTableRecordCounts['legacy_provider_count'] > 0) {
 
+                //If the current table is in the "comm" schema
                 if (strpos($this->table['table_schema'], 'comm_') !== false) {
+                    //If the current comm schema's Import Template names have not been reset
                     if(!in_array($this->table['table_schema'], $this->commSchemasCurrentlyReset))
+                        //Reset legacy Template Names for comm_templates table
                         $this->resetConflictingCommImportTemplateNames();
                 }
 
+                //Log pre merge table counts
                 $this->log->addInfo('Starting Provider Merge for Table: ' .$this->table['table_name']);
                 $this->log->addInfo('Pre Merge Table Counts', $this->preMergeTableRecordCounts);
 
+                //Loop through legacy records for current table and start merge process per legacy record
                 foreach ($this->preMergeTableRecordCounts['legacy_provider_records'] as $k => $legacy_provider_record) {
-
                     if(!empty($legacy_provider_record)){
+                        //Merge process which either updates legacy record or deletes legacy record (if table constraint exists)
                         $this->mergeLegacyProviderRecordsWithContinuingProvider($legacy_provider_record);
                     }
                 }
 
+                //Gets post legacy and contiuing record counts for current table
                 $this->postMergeTableRecordCounts = $this->getTableRecordCountsByProviderIds();
+                //Logs post merge table record counts
                 $this->log->addInfo('Post Merge Table Counts', $this->postMergeTableRecordCounts);
+                //Validate merge results by comparing pre vs. post table record counts
                 $this->validatePreVsPostTableRecordCounts();
 
+                //build affected table array which contains all tables that had update/delete commands run against them
                 if($this->dryRun == 'true')
                     $this->pgDumpTables[] = $this->table['table_name'];
             }
@@ -170,8 +194,10 @@ class ProviderMerge
      */
     private function mergeLegacyProviderRecordsWithContinuingProvider($legacy_provider_record){
 
+        //Check if current table has a unique constraint and if the continuing provider has a record with that constraint
         $mergeConstraintExists = $this->checkUniqueConstraintExistsInTableByLegacyProviderRecord($legacy_provider_record);
 
+        //Build where statement to be used in either the update or delete statement
         $whereStatement = '';
         foreach ($legacy_provider_record as $columnName => $columnValue) {
             if ($columnValue != '') {
@@ -180,9 +206,12 @@ class ProviderMerge
             }
         }
 
+        //If the continuing provider has a record containing a merge constraint
         if ($mergeConstraintExists) {
+            //Delete the legacy provider record that could not be successfully merged due to continuing provider table constraint
             $deleteMergeConstraint = $this->deleteLegacyMergeConstraintRecord($whereStatement);
 
+            //If the legacy record was successfully deleted
             if ($deleteMergeConstraint == true)
                 return true;
 
@@ -191,6 +220,7 @@ class ProviderMerge
             throw new \Exception("Merge Provider Error: Failed to delete legacy records from table with merge constraint");
         }
 
+        //If the legacy record can be successfully updated with continuing provider ID
         $this->updateLegacyProviderRecord($whereStatement);
 
         return true;
@@ -205,6 +235,7 @@ class ProviderMerge
      */
     private function updateLegacyProviderRecord($whereStatement){
         try{
+            //Update legacy provider record with continuing provider ID
             $sqlUpdate = "UPDATE {$this->table['table_schema']}.{$this->table['table_name']} 
                           SET {$this->table['column_name']} = '{$this->continuingProviderId}'";
 
@@ -215,6 +246,7 @@ class ProviderMerge
 
             $affectedRows = $stmt->rowCount();
 
+            //If sql failed to update the legacy provider record from current table - throw error and rollback
             if( $affectedRows == 0){
                 $response['message'] = "Error: Failed to update legacy provider record to continuing provider id";
                 $response['sql'] = $sqlUpdate;
@@ -248,12 +280,15 @@ class ProviderMerge
      */
     private function deleteLegacyMergeConstraintRecord($whereStatment){
         try{
+            //Delete statement to delete legacy provider record from current table
             $deleteLegacyRecordConstraintSql = "DELETE FROM {$this->table['table_schema']}.{$this->table['table_name']}";
             $deleteLegacyRecordConstraintSql .= $whereStatment;
             $stmt = $this->db->prepare($deleteLegacyRecordConstraintSql);
             $stmt->execute();
 
             $affectedRows = $stmt->rowCount();
+
+            //If delete statement successfully deleted legacy provider record - update pre-merge table counts
             if( $affectedRows > 0){
                 $this->log->addInfo('Completed SQL');
                 $this->log->addInfo($deleteLegacyRecordConstraintSql);
@@ -262,6 +297,7 @@ class ProviderMerge
                 return true;
             }
 
+            //If delete statement failed to delete legacy provider record - throw error
             $response['message'] = "Error: Delete Query did not affect any rows";
             $response['sql'] = $deleteLegacyRecordConstraintSql;
             $response['sql_exception'] = '';
@@ -288,7 +324,7 @@ class ProviderMerge
      */
     private function checkUniqueConstraintExistsInTableByLegacyProviderRecord($legacy_provider_record)
     {
-
+        //Get all columns that contain table constraint
         $tableConstraintColumnsSql = "SELECT kcu.column_name, constraint_type
                                              FROM information_schema.table_constraints AS tc 
                                              JOIN information_schema.key_column_usage AS kcu
@@ -300,12 +336,21 @@ class ProviderMerge
         $stmt->execute();
         $tableConstraintColumns = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
+        //Remove duplicate constraints from array by making array unique
         $tableConstraintColumns = array_map("unserialize", array_unique(array_map("serialize", $tableConstraintColumns)));
 
+        //Loop through legacy provider record to get columns/values
         foreach ($legacy_provider_record as $columnName => $columnValue) {
+
             $whereStatement = " WHERE {$this->table['column_name']} = '{$this->continuingProviderId}'";
+
+            //Loop through table contsraint columns
             foreach ($tableConstraintColumns as $key => $constraintColumn) {
+
+                //If the current legacy record column is a column with a constraint
                 if ($columnName == $constraintColumn['column_name'] && $columnName != $this->table['column_name']) {
+
+                    //Select statment to determine if continuing provider has a record containing that constraint
                     $mergeConstraintExistsSql = "SELECT * FROM {$this->table['table_schema']}.{$this->table['table_name']}";
                     $mergeConstraintExistsSql .= $whereStatement." AND {$columnName} = '{$columnValue}'";
 
@@ -313,12 +358,14 @@ class ProviderMerge
                     $stmt->execute();
                     $constraintExists = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
+                    //If the contiuing provider has a record with a constraint return true
                     if($constraintExists)
                         return true;
                 }
             }
         }
 
+        //If no constraint exists for the table and continuing provider return false
         return false;
     }
 
@@ -328,6 +375,7 @@ class ProviderMerge
      * @throws \Exception
      */
     private function validatePreVsPostTableRecordCounts(){
+        //If after the merge is complete for current table and legacy records still exist - throw error and rollback
         if($this->postMergeTableRecordCounts['legacy_provider_count'] > 0){
             $this->db->rollBack();
             print_r($this->preMergeTableRecordCounts);
@@ -335,6 +383,7 @@ class ProviderMerge
             throw new \Exception("Merge Provider Error: Legacy Provider records still exist in '{$this->table['table_name']}''");
         }
 
+        //If the pre combined provider record counts do not match the post combined provider record counts - throw error and rollback
         if($this->preMergeTableRecordCounts['combined_provider_count'] != $this->postMergeTableRecordCounts['combined_provider_count']){
 
             print_r($this->preMergeTableRecordCounts);
@@ -359,6 +408,7 @@ class ProviderMerge
             $columnName = $this->table['column_name'];
             $tableSchema = $this->table['table_schema'];
 
+            //Select * from current table by provider_id to get all records for that provider
             $sql = "SELECT *
                     FROM $tableSchema.$tableName
                     WHERE $columnName = '$providerId'";
@@ -369,10 +419,13 @@ class ProviderMerge
 
 
             if ($results){
+                //Sets the total number of records for both legacy and continuing providers for the current table
                 $tableRecordCounts['combined_provider_count'] = $tableRecordCounts['combined_provider_count'] + count($results);
 
                 if((int)$providerId === (int)$this->legacyProviderId){
+                    //Sets legacy provider record counts for legacy provider for the current table
                     $tableRecordCounts['legacy_provider_count'] = count($results);
+                    //Sets an array containing the legacy records for the current table
                     $tableRecordCounts['legacy_provider_records'] = $results;
                 }
             }
@@ -388,6 +441,9 @@ class ProviderMerge
      */
     private function resetLegacyOrderRelationships(){
 
+        //A select statement to get provider name from quote providers table and
+        //build a new provider name to update the master agent name in the order relationships table
+        //Example: $newMasterAgentName = 'Nitel (for Vonage Communications)';
         $sql = "
                 SELECT provider 
                        || ' (for ' 
@@ -401,6 +457,7 @@ class ProviderMerge
         $stmt->execute();
         $newMasterAgentName = $stmt->fetch(\PDO::FETCH_ASSOC);
 
+        //Insert newly built masterAgentName into order relationships table for legacy provider records
         $sql = "        
                 UPDATE order_relationships
                 SET master_agent = '{$newMasterAgentName['name']}'
@@ -438,6 +495,7 @@ class ProviderMerge
      * @throws \Exception
      */
     private function deactivateLegacyProvider(){
+        //deactivate legacy provider record in quote providers table by setting inactive flag to true
         $sql = "        
           UPDATE quote_providers SET inactive = TRUE WHERE id IN ($this->legacyProviderId);
         ";
@@ -473,6 +531,9 @@ class ProviderMerge
      * @throws \Exception
      */
     public function resetConflictingCommImportTemplateNames(){
+        //Update legacy provider comm_templates names by using legacy provider name and
+        //concatenating it on the end of the template name
+        //Example: Template Name = 'Master agent template - Vonage Communications
         $sql = "
             UPDATE {$this->table['table_schema']}.comm_templates AS t1
             SET template_name = template_name || ' - ' || (SELECT provider FROM quote_providers WHERE id = t1.provider_id)
@@ -483,6 +544,7 @@ class ProviderMerge
             $stmt = $this->db->prepare($sql);
             $stmt->execute();
 
+            //Add current table to list of tables that have had their comm_template names reset
             array_push($this->commSchemasCurrentlyReset, $this->table['table_schema']);
 
         }catch(\PDOException $e){
