@@ -170,7 +170,7 @@ class ProviderMerge
      */
     private function mergeLegacyProviderRecordsWithContinuingProvider($legacy_provider_record){
 
-        $mergeConstraintExists = $this->checkTableForUniqueConstraintByLegacyProviderRecord($legacy_provider_record);
+        $mergeConstraintExists = $this->checkUniqueConstraintExistsInTableByLegacyProviderRecord($legacy_provider_record);
 
         $whereStatement = '';
         foreach ($legacy_provider_record as $columnName => $columnValue) {
@@ -286,7 +286,7 @@ class ProviderMerge
      * @param $legacy_provider_record
      * @return array
      */
-    private function checkTableForUniqueConstraintByLegacyProviderRecord($legacy_provider_record)
+    private function checkUniqueConstraintExistsInTableByLegacyProviderRecord($legacy_provider_record)
     {
 
         $tableConstraintColumnsSql = "SELECT kcu.column_name, constraint_type
@@ -300,23 +300,26 @@ class ProviderMerge
         $stmt->execute();
         $tableConstraintColumns = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-        $whereStatement = " WHERE {$this->table['column_name']} = '{$this->continuingProviderId}'";
-        foreach ($legacy_provider_record as $columnName => $columnValue) {
-            foreach ($tableConstraintColumns as $key => $constraintColumn) {
+        $tableConstraintColumns = array_map("unserialize", array_unique(array_map("serialize", $tableConstraintColumns)));
 
+        foreach ($legacy_provider_record as $columnName => $columnValue) {
+            $whereStatement = " WHERE {$this->table['column_name']} = '{$this->continuingProviderId}'";
+            foreach ($tableConstraintColumns as $key => $constraintColumn) {
                 if ($columnName == $constraintColumn['column_name'] && $columnName != $this->table['column_name']) {
-                    $whereStatement .= " AND {$columnName} = '{$columnValue}'";
+                    $mergeConstraintExistsSql = "SELECT * FROM {$this->table['table_schema']}.{$this->table['table_name']}";
+                    $mergeConstraintExistsSql .= $whereStatement." AND {$columnName} = '{$columnValue}'";
+
+                    $stmt = $this->db->prepare($mergeConstraintExistsSql);
+                    $stmt->execute();
+                    $constraintExists = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                    if($constraintExists)
+                        return true;
                 }
             }
         }
 
-        $mergeConstraintExistsSql = "SELECT * FROM {$this->table['table_schema']}.{$this->table['table_name']}";
-        $mergeConstraintExistsSql .= $whereStatement;
-
-        $stmt = $this->db->prepare($mergeConstraintExistsSql);
-        $stmt->execute();
-
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        return false;
     }
 
     /**
