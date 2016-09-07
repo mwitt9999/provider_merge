@@ -6,9 +6,9 @@ $dotenv->load();
 
 if (!isset($argv[1]) || !isset($argv[2])){
     echo "\n";
-    echo "Error: Make sure to pass child provider ID then parent provider ID's when running this script!";
+    echo "Error: Make sure to pass the legacy provider ID then the continuing provider ID when running this script!";
     echo "\n";
-    echo "Required Params (in order): {childProviderID(int)} {parentProviderID(int)} {dryRun(boolean)}";
+    echo "Required Params (in order): {legacyProviderID(int)} {continuingID(int)} {dryRun(boolean)}";
     echo "\n";
     echo "Example Usage: php run.php 33 122 true";
     echo "\n\n";
@@ -19,18 +19,18 @@ if(!isset($argv[3])){
     echo "\n";
     echo "Error: Make sure to pass dry run flag";
     echo "\n";
-    echo "Required Params (in order): {childProviderID(int)} {parentProviderID(int)} {dryRun(boolean)}";
+    echo "Required Params (in order): {legacyProviderID(int)} {continuingProviderID(int)} {dryRun(boolean)}";
     echo "\n";
     echo "Example Usage: php run.php 123 444 false";
     echo "\n\n";
     exit;
 }
 
-$childProviderID = $argv[1];
-$parentProviderID = $argv[2];
+$legacyProviderID = $argv[1];
+$continuingProviderID = $argv[2];
 $dryRun = $argv[3];
 
 use Salestreamsoft\ProviderMerge\ProviderMerge as PM;
 
-$providerMerge = new PM($childProviderID, $parentProviderID, $dryRun);
+$providerMerge = new PM($legacyProviderID, $continuingProviderID, $dryRun);
 $providerMerge->start();
