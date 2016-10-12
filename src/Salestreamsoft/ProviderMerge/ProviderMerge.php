@@ -587,13 +587,14 @@ class ProviderMerge
      */
     private function buildPgDumpCommand(){
         if(!$this->pgDumpCommand)
-            $this->pgDumpCommand = 'pg_dump -p8100 -hlocalhost -Udevteam -Fc --data-only';
+            $this->pgDumpCommand = 'pg_dump -p'.getenv('RESTORE_DB_PORT').' -h'.getenv('RESTORE_DB_HOST').' -U'.getenv('RESTORE_DB_USER').' -Fc --data-only';
 
-        foreach($this->pgDumpTables as $key => $table){
-            $this->pgDumpCommand .= ' -t '.$table;
+//        foreach($this->pgDumpTables as $key => $table){
+        foreach($this->possibleAffectedTables as $key => $table){
+            $this->pgDumpCommand .= ' -t '.$table['table_name'];
         }
 
-        $this->pgDumpCommand .= ' DEV_MAM > /tmp/provider_merge_backup.dump';
+        $this->pgDumpCommand .= ' '.getenv('RESTORE_DB_NAME').' > '.getenv('BACKUP_STORAGE_LOCATION');
     }
 
     /**
@@ -601,10 +602,10 @@ class ProviderMerge
      */
     private function buildTruncateCommand(){
 
-        $this->truncateTablesCommand = "psql -p8100 -hlocalhost -Udevteam -dDEV_MAM -c 'TRUNCATE ";
+        $this->truncateTablesCommand = "psql -p".getenv('RESTORE_DB_PORT')." -h".getenv('RESTORE_DB_HOST')." -U".getenv('RESTORE_DB_USER')." -d".getenv('RESTORE_DB_NAME')." -c 'TRUNCATE ";
 
-        foreach($this->pgDumpTables as $key => $table){
-            if($key == 0 ? $this->truncateTablesCommand .= $table : $this->truncateTablesCommand .= ', '. $table);
+        foreach($this->possibleAffectedTables as $key => $table){
+            if($key == 0 ? $this->truncateTablesCommand .= $table['table_name'] : $this->truncateTablesCommand .= ', '. $table['table_name']);
         }
 
         $this->truncateTablesCommand .= "'";
@@ -614,7 +615,7 @@ class ProviderMerge
      * builds DB Restore Command String
      */
     private function buildRestoreDbCommand(){
-        $this->restoreDbCommand = "pg_restore -p8100 -hlocalhost -Udevteam -dDEV_MAM /tmp/provider_merge_backup.dump";
+        $this->restoreDbCommand = "pg_restore -p".getenv('RESTORE_DB_PORT')." -h".getenv('RESTORE_DB_HOST')." -U".getenv('RESTORE_DB_USER')." -d".getenv('RESTORE_DB_NAME')." > ".getenv('BACKUP_STORAGE_LOCATION');
     }
 
 }
