@@ -247,14 +247,14 @@ class ProviderMerge
             $affectedRows = $stmt->rowCount();
 
             //If sql failed to update the legacy provider record from current table - throw error and rollback
-            if( $affectedRows == 0){
+            /*if( $affectedRows == 0){
                 $response['message'] = "Error: Failed to update legacy provider record to continuing provider id";
                 $response['sql'] = $sqlUpdate;
                 $response['sql_exception'] = '';
                 print_r($response);
                 $this->db->rollBack();
                 throw new \Exception("Merge Provider Error: Failed to update legacy provider record to continuing provider id");
-            }
+            }*/
 
             $this->log->addInfo('Completed SQL');
             $this->log->addInfo($sqlUpdate);
@@ -469,7 +469,7 @@ class ProviderMerge
             $stmt->execute();
             $affectedRows = $stmt->rowCount();
 
-            if($affectedRows < 1){
+            /*if($affectedRows < 1){
                 $response['message'] = "Error: SQL Query Error";
                 $response['sql'] = $sql;
                 $response['sql_exception'] = '';
@@ -477,7 +477,7 @@ class ProviderMerge
 
                 $this->db->rollBack();
                 throw new \Exception("Merge Provider Error: Failed to reset order relationships");
-            }
+            }*/
         }catch(\PDOException $e){
 
             $response['message'] = "Error: SQL Query Error";
@@ -505,7 +505,7 @@ class ProviderMerge
             $stmt->execute();
             $affectedRows = $stmt->rowCount();
 
-            if($affectedRows < 1){
+            /*if($affectedRows < 1){
                 $response['message'] = "Error: SQL Query Error";
                 $response['sql'] = $sql;
                 $response['sql_exception'] = '';
@@ -513,7 +513,7 @@ class ProviderMerge
 
                 $this->db->rollBack();
                 throw new \Exception("Merge Provider Error: Failed to deactivate legacy provider");
-            }
+            }*/
         }catch(\PDOException $e){
 
             $response['message'] = "Error: SQL Query Error";
